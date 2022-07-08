@@ -13,20 +13,24 @@ cd ~/catkin_ws
 sudo su
 source /opt/ros/melodic/setup.bash
 source devel/setup.bash
-
-## Calibration for grippers
+```
+#### Calibration for grippers
+```bash
 rosrun senseglove_sy_gripper glove_gripper_caliration.py
-
-## Calibration for robotic hands
+```
+#### Calibration for robotic hands
+```bash
 rosrun senseglove_sy_gripper hand_cali.py
 ```
 
 # run
 
-```bash
-## Run grippers
-rosrun senseglove_sy_gripper run_gripper.py
-## Run robotic hands
-roslaunch senseglove_sy_gripper both_hands.launch
 
+#### Run grippers
+```bash
+rosrun senseglove_sy_gripper run_gripper.py
+```
+#### Run robotic hands
+```bash
+roslaunch senseglove_sy_gripper both_hands.launch
 ```
