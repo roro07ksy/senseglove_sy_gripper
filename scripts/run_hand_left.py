@@ -39,9 +39,13 @@ EXTENDED_POSITION_CONTROL_MODE  = 4
 # Protocol version
 PROTOCOL_VERSION            = 2    
 
-DXL_ID = [11,12,21,22,31,32,41,42]
-DXL_ID_FE = [12,22,32,42]
-DXL_ID_AA = [11,21,31,41]
+DXL_ID = [51,52,61,62,71,72,81,82]
+DXL_ID_FE = [52,62,72,82]
+DXL_ID_AA = [51,61,71,81]
+
+#DXL_ID = [11,12,21,22,31,32,41,42]
+#DXL_ID_FE = [12,22,32,42]
+#DXL_ID_AA = [11,21,31,41]
 
 BAUDRATE                    = 57600
 DEVICENAME                  = "/dev/ttyUSB0".encode('utf-8')        # Check which port is being used on your controller
@@ -70,7 +74,7 @@ desired_pos_aa = [0,0,0,0]
 # Thumb: Lateral Pinch, T-1, T-1	Thumb: Init, pinch, full flexion		Index: Init, pinch, full flexion	    Middle: Init, pinch, full flexion
 
 ps_fe = np.array([[0,2550,3500],[0,2900,4400],[0,2841,4400],[0,3167,4400]]) # plate : 0 , pinch , full flexion
-ps_aa = np.array([[330,0,-500],[121,0,-120],[0,0,0],[-120,0,80]]) #AA same order with calibration posture 
+ps_aa = np.array([[330,0,-500],[120,0,0],[0,0,0],[-120,0,0]]) #AA same order with calibration posture 
 
 class HandInterface:
     def __init__(self):
@@ -94,10 +98,10 @@ class HandInterface:
         self.full_joint_names = ['thumb_brake', 'index_brake', 'middle_brake', 'ring_brake', 'pinky_brake', 
                                     'thumb_cmc', 'index_mcp', 'middle_mcp', 'ring_mcp', 'pinky_mcp']
         self.vib_names = ['thumb_cmc', 'index_mcp', 'middle_mcp', 'ring_mcp', 'pinky_mcp']
-        rospy.Subscriber("/senseglove/0/rh/joint_states", JointState, self.callback, queue_size=1)
+        rospy.Subscriber("/senseglove/0/lh/joint_states", JointState, self.callback, queue_size=1)
 
         # haptic feedback from optoforce
-        self.feedback_client = actionlib.SimpleActionClient('/senseglove/0/rh/controller/trajectory/follow_joint_trajectory', FollowJointTrajectoryAction)
+        self.feedback_client = actionlib.SimpleActionClient('/senseglove/0/lh/controller/trajectory/follow_joint_trajectory', FollowJointTrajectoryAction)
         self.feedback_client.wait_for_server()
         self.feedback_goal = FollowJointTrajectoryGoal()
 
@@ -108,7 +112,7 @@ class HandInterface:
 
         self.set_glove_feedback(self.full_joint_names, [0] * 10)
         #rospy.Subscriber("/optoforce_1", WrenchStamped, self.callback1, queue_size=1)
-        rospy.Subscriber("/optoforce_norm_rh", Float64MultiArray, self.callback1, queue_size=1)
+        #rospy.Subscriber("/optoforce_norm_rh", Float64MultiArray, self.callback1, queue_size=1)
     def set_glove_feedback(self, names, vals):
         self.feedback_goal.trajectory.joint_names = names
         self.feedback_goal.trajectory.points[0].positions = vals
@@ -191,7 +195,7 @@ class HandInterface:
 		
     def __calibration(self):
         for calib_type in self.calib_types:
-            self.calib_poses[calib_type] = rospy.get_param('/dyros_glove/calibration/right/' + calib_type)
+            self.calib_poses[calib_type] = rospy.get_param('/dyros_glove/calibration/left/' + calib_type)
 
         # TODO: 
         # Use self.calib_poses['stretch'], : numpy.array(), len() = 4
@@ -207,6 +211,7 @@ class HandInterface:
         self.sph_pos = self.calib_poses['sphere']
 
         self.aa_cal_pos = np.array([[self.pla_pos[0],0,self.sph_pos[0]],[self.pla_pos[1],0,self.sph_pos[1]],[self.pla_pos[2],0,self.sph_pos[2]],[self.pla_pos[3],0,self.sph_pos[3]]]) 
+        self.aa_cal_pos = - self.aa_cal_pos
         self.fe_cal_pos = np.array([[self.pla_pos[4], self.pin_pos[4],self.tfe_pos[4]], [self.pla_pos[5], self.pin_pos[5],self.ffe_pos[5]], [self.pla_pos[6], self.pin_pos[6],self.ffe_pos[6]], [self.pla_pos[7], self.pin_pos[7],self.ffe_pos[7]]]) 
 
     def callback(self, data):
@@ -214,7 +219,8 @@ class HandInterface:
         input_pose = data.position
         
         self.current_glove_joint = np.array([input_pose[16], input_pose[0], input_pose[4], input_pose[8], input_pose[18], input_pose[2], input_pose[6], input_pose[10]])
-        self.current_glove_joint_AA = np.array([input_pose[16], input_pose[0], input_pose[4], input_pose[12]])
+        #self.current_glove_joint_AA = np.array([input_pose[16], input_pose[0], input_pose[4], input_pose[12]])
+        self.current_glove_joint_AA = np.array([-input_pose[16], -input_pose[0], -input_pose[4], -input_pose[12]])
         self.current_glove_joint_FE = np.array([input_pose[18], input_pose[2], input_pose[6], input_pose[14]])
         
         self.filtered_glove_joint = self.current_glove_joint * self.tau + self.past_glove_joints * (1 - self.tau)

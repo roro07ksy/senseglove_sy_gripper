@@ -77,5 +77,5 @@ class GloveCalibration:
 if __name__== '__main__':
     rospy.init_node('glove_gripper_calibration')
     gc = GloveCalibration()
-    #gc.calibration('left')
-    gc.calibration('right')
+    gc.calibration('left')
+    #gc.calibration('right')
