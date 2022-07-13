@@ -194,16 +194,6 @@ class HandInterface:
 
 	#print(desired_pos_aa)
 	
-
-        self.groupSyncWrite.clearParam()
-        for i in range(4):
-            param_goal_position = [dxl.DXL_LOBYTE(dxl.DXL_LOWORD(desired_pos_aa[i])), dxl.DXL_HIBYTE(dxl.DXL_LOWORD(desired_pos_aa[i])), dxl.DXL_LOBYTE(dxl.DXL_HIWORD(desired_pos_aa[i])), dxl.DXL_HIBYTE(dxl.DXL_HIWORD(desired_pos_aa[i]))]
-            self.groupSyncWrite.addParam(DXL_ID_AA[i], param_goal_position)
-            param_goal_position = [dxl.DXL_LOBYTE(dxl.DXL_LOWORD(desired_pos_fe[i])), dxl.DXL_HIBYTE(dxl.DXL_LOWORD(desired_pos_fe[i])), dxl.DXL_LOBYTE(dxl.DXL_HIWORD(desired_pos_fe[i])), dxl.DXL_HIBYTE(dxl.DXL_HIWORD(desired_pos_fe[i]))]
-            self.groupSyncWrite.addParam(DXL_ID_FE[i], param_goal_position)
-
-
-        dxl_comm_result = self.groupSyncWrite.txPacket()
         self.past_glove_joints = self.filtered_glove_joint
         self.past_glove_joints_AA = self.filtered_glove_joint_AA
         self.past_glove_joints_FE = self.filtered_glove_joint_FE
