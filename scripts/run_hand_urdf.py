@@ -149,7 +149,6 @@ class HandInterface:
         self.sph_pos = self.calib_poses['sphere']
 
         self.aa_cal_pos = np.array([[self.pla_pos[0],0,self.sph_pos[0]],[self.pla_pos[1],0,self.sph_pos[1]],[self.pla_pos[2],0,self.sph_pos[2]],[self.pla_pos[3],0,self.sph_pos[3]]]) 
-        self.aa_cal_pos = AA_DIRECTION * self.aa_cal_pos
         self.fe_cal_pos = np.array([[self.pla_pos[4], self.pin_pos[4],self.tfe_pos[4]], [self.pla_pos[5], self.pin_pos[5],self.ffe_pos[5]], [self.pla_pos[6], self.pin_pos[6],self.ffe_pos[6]], [self.pla_pos[7], self.pin_pos[7],self.ffe_pos[7]]]) 
 
     def callback(self, data):
@@ -158,7 +157,6 @@ class HandInterface:
         
         self.current_glove_joint = np.array([input_pose[16], input_pose[0], input_pose[4], input_pose[8], input_pose[18], input_pose[2], input_pose[6], input_pose[10]])
         self.current_glove_joint_AA = np.array([input_pose[16], input_pose[0], input_pose[4], input_pose[12]])
-        self.current_glove_joint_AA = AA_DIRECTION * self.current_glove_joint_AA
         self.current_glove_joint_FE = np.array([input_pose[18], input_pose[2], input_pose[6], input_pose[14]])
         
         self.filtered_glove_joint = self.current_glove_joint * self.tau + self.past_glove_joints * (1 - self.tau)
@@ -171,6 +169,9 @@ class HandInterface:
 
         desired_pos_aa[0] = init_aa[0] + ps_aa[0,0] + ((ps_aa[0,2]-ps_aa[0,0])/(self.aa_cal_pos[0,2] - self.aa_cal_pos[0,0]))*(self.filtered_glove_joint_AA[0] - self.aa_cal_pos[0,0])
         desired_pos_aa[2] = init_aa[2] #temp : middle finger fix
+
+        for i in range(4): # To control Right robotic hand using left haptic glove
+            desired_pos_aa[i] = AA_DIRECTION  * desired_pos_aa[i]
 
 
         for i in range(4):
