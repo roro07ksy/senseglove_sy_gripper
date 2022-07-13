@@ -74,7 +74,6 @@ ps_fe = (1.57/4400)*ps_fe
 ps_aa = np.array([[330,0,-500],[121,0,-120],[0,0,0],[-120,0,80]]) #AA same order with calibration posture 
 ps_aa = (1.57/4400)*ps_aa
 
-
 class HandInterface:
     def __init__(self):
         self.past_glove_joints = np.zeros(NUM_JOINT)
