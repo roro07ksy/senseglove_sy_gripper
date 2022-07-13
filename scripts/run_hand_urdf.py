@@ -9,6 +9,7 @@ from std_msgs.msg import Float64MultiArray
 from control_msgs.msg import FollowJointTrajectoryGoal, FollowJointTrajectoryAction
 from trajectory_msgs.msg import JointTrajectoryPoint
 from geometry_msgs.msg import WrenchStamped
+from std_msgs.msg import Header
 
 
 # Control table address
@@ -57,13 +58,18 @@ NUM_FINGER				= 4
 NUM_JOINT				= 8
 
 init_fe = [0,0,0,0]
-init_aa = [2000, 2000, 2000, 2000]
+#init_aa = [2000, 2000, 2000, 2000]
+init_aa = [0,0,0,0]
 
 pos = [0,0,0,0]
 vel = [0,0,0,0]
 
 desired_pos_fe = [0,0,0,0]
 desired_pos_aa = [0,0,0,0]
+
+joint_8 = JointState()
+joint_8.position = [0,0,0,0,0,0,0,0]  # input joint data order = [ aa1 aa2 aa3 aa4 fe1 fe2 fe3 fe4 ] -
+
         
 #Preset dynamixel joint value of Gripper
 #ps = np.array([[1689, init_pos[0], 2700], [init_pos[1], 1650-init_pos[1] , 2400 - init_pos[1]], [init_pos[2], 1800 - init_pos[2], 2400 - init_pos[2]], [init_pos[3], 1800 - init_pos[3], 2400 - init_pos[3]]])
@@ -71,7 +77,7 @@ desired_pos_aa = [0,0,0,0]
 
 ps_fe = np.array([[0,2550,3500],[0,2900,4400],[0,2841,4400],[0,3167,4400]]) # plate : 0 , pinch , full flexion
 ps_fe = (1.57/4400)*ps_fe
-ps_aa = np.array([[330,0,-500],[121,0,-120],[0,0,0],[-120,0,80]]) #AA same order with calibration posture 
+ps_aa = np.array([[500,0,-100],[121,0,-120],[0,0,0],[-120,0,80]]) #AA same order with calibration posture 
 ps_aa = (1.57/4400)*ps_aa
 
 class HandInterface:
@@ -97,7 +103,7 @@ class HandInterface:
         self.vib_names = ['thumb_cmc', 'index_mcp', 'middle_mcp', 'ring_mcp', 'pinky_mcp']
         #rospy.Subscriber("/senseglove/0/rh/joint_states", JointState, self.callback, queue_size=1)
         rospy.Subscriber("/finger_states", JointState, self.callback, queue_size=1)
-
+        self.pub = rospy.Publisher('/hand_joint_command', JointState , queue_size = 1)
         # haptic feedback from optoforce
         #self.feedback_client = actionlib.SimpleActionClient('/senseglove/0/rh/controller/trajectory/follow_joint_trajectory', FollowJointTrajectoryAction)
         #self.feedback_client.wait_for_server()
@@ -192,7 +198,14 @@ class HandInterface:
         
 
 	#print(desired_pos_aa)
-	
+
+
+        joint_8.header = Header()
+        joint_8.header.stamp = rospy.Time.now()
+        joint_8.position = [desired_pos_aa[0], desired_pos_aa[1], desired_pos_aa[2],desired_pos_aa[3],desired_pos_fe[0], desired_pos_fe[1],desired_pos_fe[2],desired_pos_fe[3] ]
+        self.pub.publish(joint_8)
+
+
         self.past_glove_joints = self.filtered_glove_joint
         self.past_glove_joints_AA = self.filtered_glove_joint_AA
         self.past_glove_joints_FE = self.filtered_glove_joint_FE
@@ -229,23 +242,11 @@ class HandInterface:
         
         # print('vib_data :' , vib_data)
         #self.set_glove_feedback(self.full_joint_names[0:3] + self.vib_names[0:3], [0,0,0] + vib_data[0:3])
-        self.set_glove_feedback(self.full_joint_names[0:4] + self.vib_names[0:4], break_data[0:4] + vib_data[0:4])
+        #self.set_glove_feedback(self.full_joint_names[0:4] + self.vib_names[0:4], break_data[0:4] + vib_data[0:4])
 
 
 
-    def read_joint_position(self) :
-        dxl_comm_result = self.groupSyncRead.txRxPacket()
-        for i in range(8) :
-            self.current_dxl_joints[i] = self.groupSyncRead.getData(DXL_ID[i], ADDR_XL330_PRESENT_POSITION, LEN_PRESENT_POSITION)
-            #print('Joint pos read')
-        
-        # print('current pos ' , pos)
-        
 if __name__== '__main__':
     rospy.init_node('run_hand_urdf')
     hi = HandInterface()
     rospy.spin()
-    
-    # shutdown
-    for i in DXL_ID:
-        hi.packetHandler.write1ByteTxRx(hi.portHandler, DXL_ID, ADDR_XL330_TORQUE_ENABLE , TORQUE_DISABLE)
