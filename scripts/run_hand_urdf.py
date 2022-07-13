@@ -2,7 +2,7 @@
 from __future__ import print_function, division
 import rospy
 import actionlib
-import dynamixel_sdk as dxl                  # Uses DYNAMIXEL SDK library
+#import dynamixel_sdk as dxl                  # Uses DYNAMIXEL SDK library
 import numpy as np
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
@@ -44,8 +44,8 @@ DXL_ID = [11,12,21,22,31,32,41,42]
 DXL_ID_FE = [12,22,32,42]
 DXL_ID_AA = [11,21,31,41]
 
-BAUDRATE                    = 57600
-DEVICENAME                  = "/dev/ttyUSB0".encode('utf-8')        # Check which port is being used on your controller
+#BAUDRATE                    = 57600
+#DEVICENAME                  = "/dev/ttyUSB0".encode('utf-8')        # Check which port is being used on your controller
                                                         # ex) Windows: "COM1"   Linux: "/dev/ttyUSB0"
 
 TORQUE_ENABLE               = 1                             # Value for enabling the torque
@@ -70,15 +70,17 @@ desired_pos_aa = [0,0,0,0]
 joint_8 = JointState()
 joint_8.position = [0,0,0,0,0,0,0,0]  # input joint data order = [ aa1 aa2 aa3 aa4 fe1 fe2 fe3 fe4 ] -
 
-        
+AA_DIRECTION = -1   # +1 : Right glove    ,     -1 : Left glove 
+
+
 #Preset dynamixel joint value of Gripper
 #ps = np.array([[1689, init_pos[0], 2700], [init_pos[1], 1650-init_pos[1] , 2400 - init_pos[1]], [init_pos[2], 1800 - init_pos[2], 2400 - init_pos[2]], [init_pos[3], 1800 - init_pos[3], 2400 - init_pos[3]]])
 # Thumb: Lateral Pinch, T-1, T-1	Thumb: Init, pinch, full flexion		Index: Init, pinch, full flexion	    Middle: Init, pinch, full flexion
 
-ps_fe = np.array([[0,2550,3500],[0,2900,4400],[0,2841,4400],[0,3167,4400]]) # plate : 0 , pinch , full flexion
-ps_fe = (1.57/4400)*ps_fe
-ps_aa = np.array([[500,0,-100],[121,0,-120],[0,0,0],[-120,0,80]]) #AA same order with calibration posture 
-ps_aa = (1.57/4400)*ps_aa
+ps_fe = np.array([[0,40,90],[0,55,90],[0,55,90],[0,60,90]]) # plate : 0 , pinch , full flexion
+ps_fe = (1.57/90)*ps_fe
+ps_aa = np.array([[45,0,-20],[10,0,-10],[0,0,0],[-10,0,10]]) #AA same order with calibration posture 
+ps_aa = (1.57/90)*ps_aa
 
 class HandInterface:
     def __init__(self):
@@ -147,6 +149,7 @@ class HandInterface:
         self.sph_pos = self.calib_poses['sphere']
 
         self.aa_cal_pos = np.array([[self.pla_pos[0],0,self.sph_pos[0]],[self.pla_pos[1],0,self.sph_pos[1]],[self.pla_pos[2],0,self.sph_pos[2]],[self.pla_pos[3],0,self.sph_pos[3]]]) 
+        self.aa_cal_pos = AA_DIRECTION * self.aa_cal_pos
         self.fe_cal_pos = np.array([[self.pla_pos[4], self.pin_pos[4],self.tfe_pos[4]], [self.pla_pos[5], self.pin_pos[5],self.ffe_pos[5]], [self.pla_pos[6], self.pin_pos[6],self.ffe_pos[6]], [self.pla_pos[7], self.pin_pos[7],self.ffe_pos[7]]]) 
 
     def callback(self, data):
@@ -155,6 +158,7 @@ class HandInterface:
         
         self.current_glove_joint = np.array([input_pose[16], input_pose[0], input_pose[4], input_pose[8], input_pose[18], input_pose[2], input_pose[6], input_pose[10]])
         self.current_glove_joint_AA = np.array([input_pose[16], input_pose[0], input_pose[4], input_pose[12]])
+        self.current_glove_joint_AA = AA_DIRECTION * self.current_glove_joint_AA
         self.current_glove_joint_FE = np.array([input_pose[18], input_pose[2], input_pose[6], input_pose[14]])
         
         self.filtered_glove_joint = self.current_glove_joint * self.tau + self.past_glove_joints * (1 - self.tau)
@@ -162,26 +166,26 @@ class HandInterface:
         self.filtered_glove_joint_FE = self.current_glove_joint_FE * self.tau + self.past_glove_joints_FE * (1 - self.tau)
         
         for i in range(4):
-            desired_pos_aa[i] = init_aa[i] + int(((ps_aa[i,2]-ps_aa[i,0])/(self.aa_cal_pos[i,2] - self.aa_cal_pos[i,0]))*(self.filtered_glove_joint_AA[i] - self.aa_cal_pos[i,0]))
+            desired_pos_aa[i] = init_aa[i] + ((ps_aa[i,2]-ps_aa[i,0])/(self.aa_cal_pos[i,2] - self.aa_cal_pos[i,0]))*(self.filtered_glove_joint_AA[i] - self.aa_cal_pos[i,0])
 
 
-        desired_pos_aa[0] = init_aa[0] + ps_aa[0,0] + int(((ps_aa[0,2]-ps_aa[0,0])/(self.aa_cal_pos[0,2] - self.aa_cal_pos[0,0]))*(self.filtered_glove_joint_AA[0] - self.aa_cal_pos[0,0]))
+        desired_pos_aa[0] = init_aa[0] + ps_aa[0,0] + ((ps_aa[0,2]-ps_aa[0,0])/(self.aa_cal_pos[0,2] - self.aa_cal_pos[0,0]))*(self.filtered_glove_joint_AA[0] - self.aa_cal_pos[0,0])
         desired_pos_aa[2] = init_aa[2] #temp : middle finger fix
 
 
         for i in range(4):
             if i ==0 : #thumb flexion data decrease when thumb flexed
                 if self.filtered_glove_joint_FE[i] > self.fe_cal_pos[i,1] :
-                    desired_pos_fe[i] = init_fe[i] + int(((ps_fe[i,1]-ps_fe[i,0])/(self.fe_cal_pos[i,1] - self.fe_cal_pos[i,0]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,0]))
+                    desired_pos_fe[i] = init_fe[i] + ((ps_fe[i,1]-ps_fe[i,0])/(self.fe_cal_pos[i,1] - self.fe_cal_pos[i,0]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,0])
                 else :
-                    desired_pos_fe[i] = init_fe[i]+ ps_fe[i,1] + int(((ps_fe[i,2]-ps_fe[i,1])/(self.fe_cal_pos[i,2] - self.fe_cal_pos[i,1]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,1]))
+                    desired_pos_fe[i] = init_fe[i]+ ps_fe[i,1] + ((ps_fe[i,2]-ps_fe[i,1])/(self.fe_cal_pos[i,2] - self.fe_cal_pos[i,1]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,1])
 
 
             else : 
                 if self.filtered_glove_joint_FE[i] < self.fe_cal_pos[i,1] :
-                    desired_pos_fe[i] = init_fe[i] + int(((ps_fe[i,1]-ps_fe[i,0])/(self.fe_cal_pos[i,1] - self.fe_cal_pos[i,0]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,0]))
+                    desired_pos_fe[i] = init_fe[i] + ((ps_fe[i,1]-ps_fe[i,0])/(self.fe_cal_pos[i,1] - self.fe_cal_pos[i,0]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,0])
                 else :
-                    desired_pos_fe[i] = init_fe[i]+ ps_fe[i,1] + int(((ps_fe[i,2]-ps_fe[i,1])/(self.fe_cal_pos[i,2] - self.fe_cal_pos[i,1]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,1]))
+                    desired_pos_fe[i] = init_fe[i]+ ps_fe[i,1] + ((ps_fe[i,2]-ps_fe[i,1])/(self.fe_cal_pos[i,2] - self.fe_cal_pos[i,1]))*(self.filtered_glove_joint_FE[i] - self.fe_cal_pos[i,1])
 
 
         for i in range(4):
