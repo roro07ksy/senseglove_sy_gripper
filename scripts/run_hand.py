@@ -163,6 +163,7 @@ class HandInterface:
         for i in DXL_ID_AA :
             self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_CURRENT_LIMIT , 500)
 
+
         # AA joint Torque on and init pos
         for i in DXL_ID_AA:
                 self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_TORQUE_ENABLE , TORQUE_ENABLE)
