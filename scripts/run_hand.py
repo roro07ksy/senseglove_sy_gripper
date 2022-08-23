@@ -80,8 +80,9 @@ class HandInterface:
                             'thumb_flexion',
                             'sphere']
 
-        self.__calibration()
         self.__init_dxl()
+        self.__calibration()
+        
         
         self.tau = 0.6
 
@@ -155,6 +156,13 @@ class HandInterface:
  #          self.packetHandler.write1ByteTxRx(self.portHandler, DXL_ID[i], ADDR_XL330_OPERATING_MODE , CURRENT_POSITION_CONTROL_MODE) 
  #          self.packetHandler.write2ByteTxRx(self.portHandler, DXL_ID[i], ADDR_XL330_CURRENT_LIMIT , 900) 
  
+        # Set Current Limit
+        for i in DXL_ID_FE : 
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_CURRENT_LIMIT , 500)
+
+        for i in DXL_ID_AA :
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_CURRENT_LIMIT , 500)
+
         # AA joint Torque on and init pos
         for i in DXL_ID_AA:
                 self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_TORQUE_ENABLE , TORQUE_ENABLE)
@@ -329,7 +337,8 @@ if __name__== '__main__':
         DXL_ID_FE = [12,22,32,42]
         DXL_ID_AA = [11,21,31,41]
         
-        DEVICENAME  = "/dev/ttyUSB0".encode('utf-8')        # Check which port is being used on your controller
+        #DEVICENAME  = "/dev/ttyUSB0".encode('utf-8')        # Check which port is being used on your controller
+        DEVICENAME  = dev.encode('utf-8')
         SENSEGLOVE_TOPIC = "/senseglove/0/rh/joint_states"
         FEEDBACK_TOPIC = '/senseglove/0/rh/controller/trajectory/follow_joint_trajectory'
         OPTOFORCE_TOPOC = "/optoforce_norm_rh"
@@ -344,7 +353,8 @@ if __name__== '__main__':
         DXL_ID_FE = [52,62,72,82]
         DXL_ID_AA = [51,61,71,81]
         
-        DEVICENAME  = "/dev/ttyUSB1".encode('utf-8')         # Check which port is being used on your controller
+        #DEVICENAME  = "/dev/ttyUSB1".encode('utf-8')         # Check which port is being used on your controller
+        DEVICENAME  = dev.encode('utf-8')
         SENSEGLOVE_TOPIC = "/senseglove/0/lh/joint_states"
         FEEDBACK_TOPIC = '/senseglove/0/lh/controller/trajectory/follow_joint_trajectory'
         OPTOFORCE_TOPOC = "/optoforce_norm_lh"
