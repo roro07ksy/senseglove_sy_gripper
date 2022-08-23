@@ -147,7 +147,7 @@ class HandInterface:
 			
 		# Change Operating mode
         for i in DXL_ID_AA :
-            self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_OPERATING_MODE , EXTENDED_POSITION_CONTROL_MODE)
+            self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_OPERATING_MODE , CURRENT_POSITION_CONTROL_MODE)
 			
         for i in DXL_ID_FE :
             self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_OPERATING_MODE , CURRENT_CONTROL_MODE)
@@ -188,7 +188,7 @@ class HandInterface:
         # FE joint Torque off and Change Operating Mode
         for i in DXL_ID_FE:
             self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_TORQUE_ENABLE , TORQUE_DISABLE)
-            self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_OPERATING_MODE , EXTENDED_POSITION_CONTROL_MODE)
+            self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_OPERATING_MODE , CURRENT_POSITION_CONTROL_MODE)
             self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_TORQUE_ENABLE , TORQUE_ENABLE)
 	
 		
