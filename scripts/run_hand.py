@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function, division
 import rospy
 import actionlib
@@ -6,10 +6,15 @@ import dynamixel_sdk as dxl                  # Uses DYNAMIXEL SDK library
 import numpy as np
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Int16MultiArray
+#from std_msgs.msg import Int64MultiArray
 from control_msgs.msg import FollowJointTrajectoryGoal, FollowJointTrajectoryAction
 from trajectory_msgs.msg import JointTrajectoryPoint
 from geometry_msgs.msg import WrenchStamped
+import time
+import sys
 
+# sys.stdout = unbuffered
 
 # Control table address
 ADDR_XL330_TORQUE_ENABLE       	= 64                          # Control table address is different in Dynamixel model
@@ -23,6 +28,11 @@ ADDR_XL330_CURRENT_LIMIT	= 38
 
 ADDR_XL330_GOAL_CURRENT		= 102
 ADDR_XL330_DRIVING_MODE     = 10
+
+ADDR_XL330_D_GAIN_POSITION  = 80
+ADDR_XL330_I_GAIN_POSITION  = 82
+ADDR_XL330_P_GAIN_POSITION  = 84
+
 
 LEN_GOAL_POSITION		= 4
 LEN_PRESENT_VELOCITY		= 4
@@ -61,10 +71,13 @@ desired_pos_fe = [0,0,0,0]
 desired_pos_aa = [0,0,0,0]
         
 #Preset dynamixel joint value of Gripper
-ps_fe = np.array([[0,2550,3500],[0,2900,4400],[0,2841,4400],[0,3167,4400]]) # plate : 0 , pinch , full flexion
-ps_aa = np.array([[330,0,-500],[121,0,0],[0,0,0],[-120,0,0]]) #AA same order with calibration posture 
+#ps_fe = np.array([[0,2550,3500],[0,2900,4400],[0,2841,4400],[0,3167,4400]]) # plate : 0 , pinch , full flexion
+#220907 update
+ps_fe = np.array([[0,2300,4000],[0,2700,4500],[0,2900,4500],[0,3150,4500]]) # plate : 0 , pinch , full flexion
+ps_aa = np.array([[330,0,-500],[70,0,0],[0,0,0],[-70,0,0]]) #AA same order with calibration posture 
 
-
+CurLimit_FE = [850, 550, 550, 550]
+Gain_position = [400, 40, 250]  # D - I - P
 
 
 class HandInterface:
@@ -73,6 +86,10 @@ class HandInterface:
         self.past_glove_joints_AA = np.zeros(NUM_FINGER)
         self.past_glove_joints_FE = np.zeros(NUM_FINGER)
         self.current_dxl_joints = np.zeros(NUM_JOINT)
+      
+        #self.joint_currents = np.zeros(NUM_JOINT)
+        self.joint_currents = np.zeros(NUM_JOINT,dtype=np.int16)
+
         self.calib_poses = {}
         self.calib_types = ['plate',
                             'pinch',
@@ -80,8 +97,14 @@ class HandInterface:
                             'thumb_flexion',
                             'sphere']
 
+        
+
+        # print('init dxl')
         self.__init_dxl()
+        # print('calib dxl')
         self.__calibration()
+
+        self.heartbeat()
         
         
         self.tau = 0.6
@@ -94,7 +117,7 @@ class HandInterface:
 
         # haptic feedback from optoforce
         self.feedback_client = actionlib.SimpleActionClient(FEEDBACK_TOPIC, FollowJointTrajectoryAction)
-        self.feedback_client.wait_for_server()
+        #self.feedback_client.wait_for_server()
         self.feedback_goal = FollowJointTrajectoryGoal()
 
         point = JointTrajectoryPoint()
@@ -102,9 +125,16 @@ class HandInterface:
         point.time_from_start = rospy.Duration.from_sec(0.3)
         self.feedback_goal.trajectory.points.append(point)
 
-        self.set_glove_feedback(self.full_joint_names, [0] * 10)
+        #self.set_glove_feedback(self.full_joint_names, [0] * 10)
         #rospy.Subscriber("/optoforce_1", WrenchStamped, self.callback1, queue_size=1)
         rospy.Subscriber(OPTOFORCE_TOPOC, Float64MultiArray, self.callback1, queue_size=1)
+
+
+        #joint current publisher
+        self.current_pub = rospy.Publisher(CURRENT_TOPIC, Int16MultiArray, queue_size = 1)
+
+
+
     def set_glove_feedback(self, names, vals):
         self.feedback_goal.trajectory.joint_names = names
         self.feedback_goal.trajectory.points[0].positions = vals
@@ -116,19 +146,53 @@ class HandInterface:
         # self.set_glove_feedback(['thumb_cmc'], [40]) # vibration 40 %
         # self.set_glove_feedback(['thumb_brake', 'thumb_cmc'], [20, 40]) # break 20 %, vibration 40 %
     
+    def heartbeat(self):
+        # print('heart beat')
+        #dxl_comm_result = self.groupSyncRead.txRxPacket()
+        #print(self.groupSyncRead_current.last_errors)
+        for i in DXL_ID:
+            try:
+                if self.groupSyncRead_current.last_errors[i] != 0:
+                    print('[ID:%03d] !!!! HARDWARE ERROR !!!!!!' % i)
+                    self.recovery(i)
+            except:
+                pass
+
+    def recovery(self, id):
+        dxl_comm_result, dxl_error = self.packetHandler.reboot(self.portHandler, id)
+        rospy.sleep(0.1)
+        self.packetHandler.write1ByteTxRx(self.portHandler, id, ADDR_XL330_TORQUE_ENABLE , TORQUE_ENABLE)
+        if dxl_comm_result != 0:
+            print("%s" % self.packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("%s" % self.packetHandler.getRxPacketError(dxl_error))
+
+        print("[ID:%03d] reboot Succeeded\n" % id)
+        print("[ID:%03d] torque on\n" % id)
+        sys.stdout.flush()
     
     def __init_dxl(self):
         self.portHandler = dxl.PortHandler(DEVICENAME)
         self.packetHandler = dxl.PacketHandler(PROTOCOL_VERSION)
         self.groupSyncWrite = dxl.GroupSyncWrite(self.portHandler, self.packetHandler, ADDR_XL330_GOAL_POSITION, LEN_GOAL_POSITION)
         self.groupSyncRead = dxl.GroupSyncRead(self.portHandler, self.packetHandler, ADDR_XL330_PRESENT_POSITION, LEN_PRESENT_POSITION)
+        for i in DXL_ID	 :
+            self.groupSyncRead.addParam(i)
+
+        self.groupSyncRead_current = dxl.GroupSyncRead(self.portHandler, self.packetHandler, 126, 2)
+        for i in DXL_ID_AA :
+            self.groupSyncRead_current.addParam(i)
+
+        for i in DXL_ID_FE :
+            self.groupSyncRead_current.addParam(i)
+
+
 	
         self.groupSyncWrite_AA = dxl.GroupSyncWrite(self.portHandler, self.packetHandler, ADDR_XL330_GOAL_POSITION, LEN_GOAL_POSITION)
         self.groupSyncWrite_FE = dxl.GroupSyncWrite(self.portHandler, self.packetHandler, ADDR_XL330_GOAL_POSITION, LEN_GOAL_POSITION)
 		
 		
-        for i in DXL_ID	 :
-            self.groupSyncRead.addParam(i)
+
 
         # Open port
         try: self.portHandler.clearPort()
@@ -156,12 +220,14 @@ class HandInterface:
  #          self.packetHandler.write1ByteTxRx(self.portHandler, DXL_ID[i], ADDR_XL330_OPERATING_MODE , CURRENT_POSITION_CONTROL_MODE) 
  #          self.packetHandler.write2ByteTxRx(self.portHandler, DXL_ID[i], ADDR_XL330_CURRENT_LIMIT , 900) 
  
+
         # Set Current Limit
-        for i in DXL_ID_FE : 
-            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_CURRENT_LIMIT , 500)
+        for i in range(4) : 
+            self.packetHandler.write2ByteTxRx(self.portHandler, DXL_ID_FE[i], ADDR_XL330_CURRENT_LIMIT , CurLimit_FE[i])
+
 
         for i in DXL_ID_AA :
-            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_CURRENT_LIMIT , 500)
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_CURRENT_LIMIT , 300)
 
 
         # AA joint Torque on and init pos
@@ -190,12 +256,32 @@ class HandInterface:
             self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_TORQUE_ENABLE , TORQUE_DISABLE)
             self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_OPERATING_MODE , CURRENT_POSITION_CONTROL_MODE)
             self.packetHandler.write1ByteTxRx(self.portHandler, i, ADDR_XL330_TORQUE_ENABLE , TORQUE_ENABLE)
+
+
+        # Set PID gains of Controller
+        for i in DXL_ID_FE :
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_D_GAIN_POSITION , Gain_position[0])
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_I_GAIN_POSITION , Gain_position[1])
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_P_GAIN_POSITION , Gain_position[2])
+        for i in DXL_ID_AA :
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_D_GAIN_POSITION , Gain_position[0])
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_I_GAIN_POSITION , 0) # No I gain to AA joints
+            self.packetHandler.write2ByteTxRx(self.portHandler, i, ADDR_XL330_P_GAIN_POSITION , 500)
 	
-		
+        dxl_comm_result = self.groupSyncRead_current.txRxPacket()
 		
     def __calibration(self):
+        
+        
         for calib_type in self.calib_types:
+            while rospy.has_param(CALIB_TOPIC + calib_type) != 1 :
+                print('[',rospy.get_time(),']', 'Waiting Hand Calibrations',location)
+                if (rospy.is_shutdown()):
+                    break
+                rospy.sleep(2)
             self.calib_poses[calib_type] = rospy.get_param(CALIB_TOPIC + calib_type)
+            
+
 
         # TODO: 
         # Use self.calib_poses['stretch'], : numpy.array(), len() = 4
@@ -322,6 +408,20 @@ class HandInterface:
             #print('Joint pos read')
         
         # print('current pos ' , pos)
+
+
+    def read_current(self) :
+        dxl_current_result = self.groupSyncRead_current.txRxPacket()
+        for i in range(4) :
+            self.joint_currents[i] = self.groupSyncRead_current.getData(DXL_ID_AA[i], 126, 2)
+        for i in range(4) :
+            self.joint_currents[i+4] = self.groupSyncRead_current.getData(DXL_ID_FE[i], 126, 2)
+        msg= Int16MultiArray()
+        #msg= Int64MultiArray()
+        msg.data = self.joint_currents.tolist()
+        self.current_pub.publish(msg)
+        #print(msg.data)
+
         
 if __name__== '__main__':
     rospy.init_node('run_hand')
@@ -339,13 +439,16 @@ if __name__== '__main__':
         DXL_ID_AA = [11,21,31,41]
         
         #DEVICENAME  = "/dev/ttyUSB0".encode('utf-8')        # Check which port is being used on your controller
-        DEVICENAME  = dev.encode('utf-8')
+        DEVICENAME  = dev
         SENSEGLOVE_TOPIC = "/senseglove/0/rh/joint_states"
+        #SENSEGLOVE_TOPIC = "/mix_data"
         FEEDBACK_TOPIC = '/senseglove/0/rh/controller/trajectory/follow_joint_trajectory'
         OPTOFORCE_TOPOC = "/optoforce_norm_rh"
         CALIB_TOPIC = '/dyros_glove/calibration/right/'
+        CURRENT_TOPIC = '/hand/r/current'
 
         AA_DIRECTION = 1
+
         
 
 
@@ -355,11 +458,12 @@ if __name__== '__main__':
         DXL_ID_AA = [51,61,71,81]
         
         #DEVICENAME  = "/dev/ttyUSB1".encode('utf-8')         # Check which port is being used on your controller
-        DEVICENAME  = dev.encode('utf-8')
+        DEVICENAME  = dev
         SENSEGLOVE_TOPIC = "/senseglove/0/lh/joint_states"
         FEEDBACK_TOPIC = '/senseglove/0/lh/controller/trajectory/follow_joint_trajectory'
         OPTOFORCE_TOPOC = "/optoforce_norm_lh"
         CALIB_TOPIC = '/dyros_glove/calibration/left/'
+        CURRENT_TOPIC = '/hand/l/current'
 
         AA_DIRECTION = -1
 
@@ -368,7 +472,25 @@ if __name__== '__main__':
 
     hi = HandInterface()
 
-    rospy.spin()
+    sys.stdout.flush()
+
+    flush_60 = 0;
+
+    while rospy.is_shutdown() is False:
+        #print('read current')
+        hi.read_current()
+        hi.heartbeat()
+        time.sleep(0.02)
+        flush_60 = flush_60 + 1
+        if(flush_60 == 60):
+            flush_60 = 0
+            sys.stdout.flush()
+    #while rospy.is_shutdown() is False:
+    #   hi.read_current()
+    #   hi.heartbeat()
+    #    time.sleep(1.0)
+
+    # rospy.spin()
     
     # shutdown
     for i in DXL_ID:
