@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function, division
 import rospy
 import os, sys
 import copy
 import numpy as np
-import keyboard
+#import keyboard
 from functools import partial
 from sensor_msgs.msg import JointState
 
@@ -49,7 +49,7 @@ class GloveCalibration:
         for calib_type in self.calib_types:
             print ('calibrating... {0} - {1}'.format(location, calib_type))
             print('Press enter to start this calibration')
-            a = raw_input()
+            a = input()
             #os.system('pause')
 
             self.joint_captures[location] = []

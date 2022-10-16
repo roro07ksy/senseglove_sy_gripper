@@ -1,8 +1,8 @@
 <launch>
 
-  <node name="left_hand" pkg="senseglove_sy_gripper" type="run_hand.py"  output="screen">
+  <node name="left_hand" pkg="senseglove_sy_gripper" type="run_hand.py"  output="screen" launch-prefix="stdbuf -o L">
     <param name="location" type="str" value="left"/>
-    <param name="dev" type="str" value="/dev/ttyUSB0"/>
+    <param name="dev" type="str" value="/dev/dxl_left"/>
   </node>
  
 </launch>
